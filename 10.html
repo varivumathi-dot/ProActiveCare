@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ProActiveCare – AI Diabetes Management</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{
+    font-family:Arial;
+    background:#f4f9fc;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+}
+.card{
+    background:white;
+    padding:25px;
+    width:500px;
+    border-radius:12px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.1);
+    text-align:center;
+}
+h1{color:#0a4f8a;}
+input,select{
+    width:100%;
+    padding:10px;
+    margin-bottom:10px;
+}
+button{
+    width:100%;
+    padding:10px;
+    background:#0a4f8a;
+    color:white;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    margin-bottom:8px;
+}
+button:hover{background:#083c69;}
+.glucose-circle{
+    width:170px;
+    height:170px;
+    border-radius:50%;
+    margin:10px auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+    color:white;
+}
+.status{font-weight:bold;margin-bottom:10px;}
+table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+}
+th,td{
+    border:1px solid #ccc;
+    padding:5px;
+}
+th{background:#e9f2f9;}
+.hidden{display:none;}
+.logout{background:#999;}
+.note{font-size:11px;color:#777;margin-top:10px;}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN PAGE -->
+<div id="loginPage" class="card">
+<h1>ProActiveCare</h1>
+
+<h3>Patient Login</h3>
+<input type="text" id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<input type="number" id="age" placeholder="Age">
+<select id="gender">
+<option value="">Select Gender</option>
+<option>Male</option>
+<option>Female</option>
+<option>Other</option>
+</select>
+<button onclick="login()">Login</button>
+<p id="loginError" style="color:red;"></p>
+
+<hr>
+
+<h3>Doctor Login</h3>
+<input type="text" id="docUser" placeholder="Doctor Username">
+<input type="password" id="docPass" placeholder="Doctor Password">
+<button onclick="doctorLogin()">Doctor Login</button>
+
+<p style="font-size:12px;color:#777;">
+Doctor ID: <b>doctor</b> | Password: <b>admin</b>
+</p>
+</div>
+
+<!-- PATIENT DASHBOARD -->
+<div id="dashboard" class="card hidden">
+<h1>ProActiveCare</h1>
+<p id="userInfo"></p>
+
+<div class="glucose-circle" id="glucoseCircle">-- mg/dL</div>
+<div class="status" id="statusText">Enter glucose value</div>
+
+<input type="number" id="glucoseInput" placeholder="Enter glucose (mg/dL)">
+<button onclick="updateGlucose()">Check Level</button>
+
+<div id="dietSection" class="hidden">
+<h3>Diet Recommendation</h3>
+<table>
+<thead>
+<tr>
+<th>Meal</th><th>Recommended</th><th>Portion</th><th>Avoid</th>
+</tr>
+</thead>
+<tbody id="dietBody"></tbody>
+</table>
+</div>
+
+<div id="doctorAdvice" class="hidden">
+<h3>Doctor Suggestion</h3>
+<p id="adviceText"></p>
+</div>
+
+<hr>
+<h3>Monthly Progress</h3>
+<canvas id="glucoseChart" height="200"></canvas>
+
+<button onclick="openMonthlyReport()">View Monthly Report</button>
+<button onclick="downloadReport()">Download Medical Report</button>
+<button class="logout" onclick="logout()">Logout</button>
+
+<div class="note">
+⚠ AI-based guidance only. Consult certified doctor.
+</div>
+</div>
+
+<!-- DOCTOR PANEL -->
+<div id="doctorDashboard" class="card hidden">
+<h1>Doctor Panel</h1>
+<h3>Patient Glucose History</h3>
+<div id="doctorData"></div>
+<button class="logout" onclick="logout()">Logout</button>
+</div>
+
+<!-- MONTHLY REPORT PAGE -->
+<div id="monthlyReportPage" class="card hidden">
+<h1>Monthly Glucose Report</h1>
+
+<div id="reportSummary" style="text-align:left;margin-bottom:15px;"></div>
+<canvas id="monthlyChart" height="200"></canvas>
+
+<button onclick="backToDashboard()">Back to Dashboard</button>
+</div>
+
+<script>
+const validUser="patient";
+const validPass="1234";
+
+let glucoseHistory=[];
+let chart;
+
+window.onload=function(){
+    const saved=localStorage.getItem("glucoseHistory");
+    if(saved){
+        glucoseHistory=JSON.parse(saved);
+    }
+};
+
+function login(){
+    if(username.value===validUser && password.value===validPass){
+        loginPage.classList.add("hidden");
+        dashboard.classList.remove("hidden");
+        userInfo.innerText="Age: "+age.value+" | Gender: "+gender.value;
+        updateChart();
+    }else{
+        loginError.innerText="Invalid credentials";
+    }
+}
+
+function doctorLogin(){
+    if(docUser.value==="doctor" && docPass.value==="admin"){
+        loginPage.classList.add("hidden");
+        doctorDashboard.classList.remove("hidden");
+        doctorData.innerText=localStorage.getItem("glucoseHistory") || "No Data Available";
+    }else{
+        alert("Invalid Doctor Credentials");
+    }
+}
+
+function logout(){
+    location.reload();
+}
+
+function updateGlucose(){
+    const value=Number(glucoseInput.value);
+    if(!value || value<40 || value>400){
+        alert("Enter valid glucose (40-400)");
+        return;
+    }
+
+    glucoseHistory.push(value);
+    localStorage.setItem("glucoseHistory",JSON.stringify(glucoseHistory));
+
+    glucoseCircle.innerText=value+" mg/dL";
+    dietSection.classList.remove("hidden");
+    doctorAdvice.classList.remove("hidden");
+
+    if(value<70){
+        setUI("blue","Low Sugar");
+        loadDiet("low");
+        adviceText.innerText="Consume fast-acting carbs immediately.";
+    }
+    else if(value<=140){
+        setUI("green","Normal");
+        loadDiet("normal");
+        adviceText.innerText="Maintain balanced diet and exercise.";
+    }
+    else if(value<=199){
+        setUI("orange","Warning");
+        loadDiet("warning");
+        adviceText.innerText="Reduce carbs and increase activity.";
+    }
+    else{
+        setUI("red","Critical");
+        loadDiet("critical");
+        adviceText.innerText="Immediate medical consultation required.";
+    }
+
+    updateChart();
+}
+
+function setUI(color,text){
+    glucoseCircle.style.background=color;
+    statusText.innerText=text;
+    statusText.style.color=color;
+}
+
+function loadDiet(level){
+    dietBody.innerHTML="";
+    const data={
+        low:[
+            ["Breakfast","Banana, Milk","Moderate","Skipping meals"],
+            ["Lunch","Rice, Dal","Balanced","Fasting"],
+            ["Snack","Fruit juice","Small","Excess insulin"],
+            ["Dinner","Chapati, Sabzi","Light","Long gaps"]
+        ],
+        normal:[
+            ["Breakfast","Oats/Idli","1 bowl","Sugary cereals"],
+            ["Lunch","Brown rice, Dal","1 cup","White rice"],
+            ["Snack","Fruit, Nuts","1 portion","Biscuits"],
+            ["Dinner","Chapati, Sabzi","2","Fried food"]
+        ],
+        warning:[
+            ["Breakfast","Millets","1 bowl","Bread jam"],
+            ["Lunch","Millet rice","1 cup","White rice"],
+            ["Snack","Sprouts","1 bowl","Sweets"],
+            ["Dinner","Chapati curry","2","Late meals"]
+        ],
+        critical:[
+            ["Breakfast","Veg omelette","Small","Sugar"],
+            ["Lunch","Salad, Dal","Controlled","Rice"],
+            ["Snack","Nuts","Small","Sweet fruits"],
+            ["Dinner","Soup, Protein","Light","Carbs"]
+        ]
+    };
+
+    data[level].forEach(row=>{
+        const tr=document.createElement("tr");
+        row.forEach(col=>{
+            const td=document.createElement("td");
+            td.innerText=col;
+            tr.appendChild(td);
+        });
+        dietBody.appendChild(tr);
+    });
+}
+
+function updateChart(){
+    const ctx=document.getElementById("glucoseChart").getContext("2d");
+    if(chart) chart.destroy();
+    chart=new Chart(ctx,{
+        type:"line",
+        data:{
+            labels:glucoseHistory.map((_,i)=>"Day "+(i+1)),
+            datasets:[{
+                label:"Glucose Level",
+                data:glucoseHistory,
+                borderColor:"#0a4f8a",
+                tension:0.3
+            }]
+        },
+        options:{scales:{y:{min:40,max:400}}}
+    });
+}
+
+function openMonthlyReport(){
+    if(glucoseHistory.length===0){
+        alert("No data available.");
+        return;
+    }
+
+    dashboard.classList.add("hidden");
+    monthlyReportPage.classList.remove("hidden");
+
+    const avg=(glucoseHistory.reduce((a,b)=>a+b,0)/glucoseHistory.length).toFixed(2);
+    const max=Math.max(...glucoseHistory);
+    const min=Math.min(...glucoseHistory);
+
+    reportSummary.innerHTML=`
+    <b>Total Entries:</b> ${glucoseHistory.length}<br>
+    <b>Average:</b> ${avg} mg/dL<br>
+    <b>Highest:</b> ${max} mg/dL<br>
+    <b>Lowest:</b> ${min} mg/dL
+    `;
+
+    const ctx=document.getElementById("monthlyChart").getContext("2d");
+    if(window.monthChart) window.monthChart.destroy();
+    window.monthChart=new Chart(ctx,{
+        type:"bar",
+        data:{
+            labels:glucoseHistory.map((_,i)=>"Day "+(i+1)),
+            datasets:[{
+                label:"Monthly Glucose",
+                data:glucoseHistory,
+                backgroundColor:"#0a4f8a"
+            }]
+        },
+        options:{scales:{y:{min:40,max:400}}}
+    });
+}
+
+function backToDashboard(){
+    monthlyReportPage.classList.add("hidden");
+    dashboard.classList.remove("hidden");
+}
+
+async function downloadReport(){
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF();
+    doc.text("ProActiveCare Medical Report",20,20);
+    doc.text("Patient: "+userInfo.innerText,20,30);
+    doc.text("Latest Glucose: "+glucoseCircle.innerText,20,40);
+    doc.text("Status: "+statusText.innerText,20,50);
+    doc.text("Advice: "+adviceText.innerText,20,60,{maxWidth:170});
+    doc.save("ProActiveCare_Report.pdf");
+}
+</script>
+
+</body>
+</html>
